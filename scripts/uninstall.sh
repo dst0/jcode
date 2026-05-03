@@ -19,6 +19,9 @@ info() { printf '\033[1;34m%s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33mwarning: %s\033[0m\n' "$*" >&2; }
 err()  { printf '\033[1;31merror: %s\033[0m\n' "$*" >&2; exit 1; }
 
+# Seconds to wait for jcode processes to exit after SIGTERM before SIGKILL.
+STOP_TIMEOUT=5
+
 DRY_RUN=false
 ASSUME_YES=false
 
@@ -226,9 +229,22 @@ unload_macos_hotkey_agent() {
 
 unregister_macos_app_launcher() {
   [[ "$OS" = "Darwin" ]] || return 0
-  local lsregister
-  lsregister="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
-  [[ -x "$lsregister" ]] || return 0
+
+  # Locate lsregister — the binary lives inside the CoreServices framework
+  # bundle and has been at this path since macOS 10.4; check a second candidate
+  # for forward-compatibility.
+  local lsregister=""
+  local candidate
+  for candidate in \
+    "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister" \
+    "/System/Library/Frameworks/CoreServices.framework/Support/lsregister"
+  do
+    if [[ -x "$candidate" ]]; then
+      lsregister="$candidate"
+      break
+    fi
+  done
+  [[ -n "$lsregister" ]] || return 0
 
   local app_dir
   for app_dir in "$HOME/Applications/Jcode.app" "$HOME/Applications/jcode.app"; do
@@ -259,9 +275,9 @@ stop_running_processes() {
   fi
 
   if pkill -TERM jcode 2>/dev/null; then
-    info "sent SIGTERM to jcode processes; waiting up to 5 s…"
+    info "sent SIGTERM to jcode processes; waiting up to ${STOP_TIMEOUT} s…"
     local i=0
-    while pkill -0 jcode 2>/dev/null && [[ $i -lt 5 ]]; do
+    while pkill -0 jcode 2>/dev/null && [[ $i -lt $STOP_TIMEOUT ]]; do
       sleep 1
       i=$(( i + 1 ))
     done
