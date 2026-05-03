@@ -902,6 +902,11 @@ directory are stored under `~/.cache/jcode-docker-dev/` on the host.
 Override with `JCODE_DEV_CACHE_DIR`.  This means builds after the first one
 are fast even if you recreate the container.
 
+The container automatically sets `CARGO_TARGET_DIR=/work/target/docker`, which
+maps to `~/.cache/jcode-docker-dev/target` on the host.  All builds — whether
+run via `--install` or interactively inside the container — write to this
+isolated directory and never touch the host's own `target/` tree.
+
 ### Environment variables
 
 | Variable | Default | Description |

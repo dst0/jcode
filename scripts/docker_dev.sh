@@ -189,17 +189,19 @@ fi
 # Without host networking we publish container port 22 → host port 2222.
 SSH_PUBLISH_ARGS=()
 SSH_SETUP_CMDS=()
-SSHD_PORT=22
+SSHD_PORT=22        # port sshd binds inside the container
+SSH_HOST_PORT=2222  # port the user connects to on the host
 if [[ "$ENABLE_SSH" == true ]]; then
   if use_host_network; then
     # Host networking: -p flags are silently ignored by Docker; run sshd on
-    # an unprivileged port that won't clash with the host's sshd.
+    # an unprivileged port that won't clash with the host's sshd on port 22.
     SSHD_PORT=2222
     SSH_SETUP_CMDS+=("sed -i 's/^#\?Port .*/Port 2222/' /etc/ssh/sshd_config")
   else
-    # Bridge/default networking: publish container port 22 on host port 2222.
+    # Bridge/default networking: sshd listens on 22 inside the container;
+    # Docker maps host:2222 → container:22.
     SSH_PUBLISH_ARGS=(-p "2222:22")
-    SSHD_PORT=2222
+    SSHD_PORT=22
   fi
 
   # Inject authorized key
@@ -210,8 +212,8 @@ if [[ "$ENABLE_SSH" == true ]]; then
       "echo '$PUBKEY' >> /root/.ssh/authorized_keys"
       "chmod 600 /root/.ssh/authorized_keys"
     )
-    info "SSH enabled on host port $SSHD_PORT (authorized key: $SSH_PUBKEY_FILE)"
-    info "Connect with: ssh -p $SSHD_PORT root@localhost"
+    info "SSH enabled on host port $SSH_HOST_PORT (authorized key: $SSH_PUBKEY_FILE)"
+    info "Connect with: ssh -p $SSH_HOST_PORT root@localhost"
   else
     warn "SSH requested but no public key found at $SSH_PUBKEY_FILE"
     warn "Set SSH_PUBKEY_FILE to point to your public key, or add keys manually:"
@@ -241,6 +243,7 @@ docker run -d \
   -e CARGO_TERM_COLOR=always \
   -e RUSTUP_HOME=/root/.rustup \
   -e CARGO_HOME=/root/.cargo \
+  -e CARGO_TARGET_DIR=/work/target/docker \
   "${ENV_ARGS[@]+"${ENV_ARGS[@]}"}" \
   -v "$REPO_ROOT:/work" \
   -v "$JCODE_DATA_HOST:/root/.jcode" \
@@ -266,16 +269,11 @@ fi
 # ── optional in-container build & install ─────────────────────────────────────
 if [[ "$DO_INSTALL" == true ]]; then
   info "Building jcode inside the container (release profile) …"
-  # Use a Docker-specific target directory so that build artefacts inside the
-  # container do not overwrite the host's own incremental build cache that is
-  # mapped at /work/target.
-  DOCKER_TARGET_DIR=/work/target/docker
   docker exec -it "$CONTAINER" bash -lc "
     set -euo pipefail
-    export CARGO_TARGET_DIR='$DOCKER_TARGET_DIR'
     sccache --start-server 2>/dev/null || true
     scripts/dev_cargo.sh build --release -p jcode --bin jcode
-    install -Dm755 '$DOCKER_TARGET_DIR/release/jcode' /root/.local/bin/jcode
+    install -Dm755 \"\$CARGO_TARGET_DIR/release/jcode\" /root/.local/bin/jcode
     echo ''
     echo 'jcode installed.'
     /root/.local/bin/jcode --version
@@ -294,7 +292,7 @@ info ""
 info "To open another shell later:  scripts/docker_dev.sh --exec"
 info "To stop the container:        scripts/docker_dev.sh --stop"
 if [[ "$ENABLE_SSH" == true ]]; then
-  info "SSH:  ssh -p $SSHD_PORT root@localhost"
+  info "SSH:  ssh -p $SSH_HOST_PORT root@localhost"
 fi
 info ""
 
