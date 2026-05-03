@@ -660,6 +660,8 @@ impl SessionEndReason {
 }
 
 pub fn is_enabled() -> bool {
+    // Telemetry is disabled by default. Opt out signals are still respected for
+    // forward-compat, but sending data requires an explicit opt-in.
     if std::env::var("JCODE_NO_TELEMETRY").is_ok() || std::env::var("DO_NOT_TRACK").is_ok() {
         return false;
     }
@@ -668,7 +670,16 @@ pub fn is_enabled() -> bool {
     {
         return false;
     }
-    true
+    // Must explicitly opt in via env var or marker file.
+    if std::env::var("JCODE_TELEMETRY").is_ok() {
+        return true;
+    }
+    if let Ok(dir) = storage::jcode_dir()
+        && dir.join("telemetry_enabled").exists()
+    {
+        return true;
+    }
+    false
 }
 
 fn telemetry_envelope() -> (u32, String, bool, bool, bool) {
@@ -2031,10 +2042,11 @@ pub enum ErrorCategory {
 
 fn show_first_run_notice() {
     eprintln!("\x1b[90m");
-    eprintln!("  jcode collects anonymous usage statistics (install count, version, OS,");
+    eprintln!("  Telemetry has been explicitly enabled (JCODE_TELEMETRY=1 or telemetry_enabled).");
+    eprintln!("  jcode may collect anonymous usage statistics (install count, version, OS,");
     eprintln!("  session activity, tool counts, and crash/exit reasons). No code, filenames,");
     eprintln!("  prompts, or personal data is sent.");
-    eprintln!("  To opt out: export JCODE_NO_TELEMETRY=1");
+    eprintln!("  To disable: export JCODE_NO_TELEMETRY=1");
     eprintln!("  Details: https://github.com/1jehuang/jcode/blob/master/TELEMETRY.md");
     eprintln!("\x1b[0m");
 }

@@ -11,6 +11,33 @@ fn lock_telemetry_test_state() -> std::sync::MutexGuard<'static, ()> {
 }
 
 #[test]
+fn test_disabled_by_default() {
+    let _guard = lock_test_env();
+    crate::env::remove_var("JCODE_TELEMETRY");
+    crate::env::remove_var("JCODE_NO_TELEMETRY");
+    crate::env::remove_var("DO_NOT_TRACK");
+    assert!(!is_enabled());
+}
+
+#[test]
+fn test_opt_in_env_var() {
+    let _guard = lock_test_env();
+    crate::env::set_var("JCODE_TELEMETRY", "1");
+    assert!(is_enabled());
+    crate::env::remove_var("JCODE_TELEMETRY");
+}
+
+#[test]
+fn test_opt_out_env_var_overrides_opt_in() {
+    let _guard = lock_test_env();
+    crate::env::set_var("JCODE_TELEMETRY", "1");
+    crate::env::set_var("JCODE_NO_TELEMETRY", "1");
+    assert!(!is_enabled());
+    crate::env::remove_var("JCODE_TELEMETRY");
+    crate::env::remove_var("JCODE_NO_TELEMETRY");
+}
+
+#[test]
 fn test_opt_out_env_var() {
     let _guard = lock_test_env();
     crate::env::set_var("JCODE_NO_TELEMETRY", "1");
@@ -226,6 +253,8 @@ fn test_session_end_event_serialization() {
 #[test]
 fn test_record_token_usage_aggregates_session_and_turn() {
     let _guard = lock_telemetry_test_state();
+    let _env_guard = lock_test_env();
+    crate::env::set_var("JCODE_TELEMETRY", "1");
     reset_counters();
     if let Ok(mut session) = SESSION_STATE.lock() {
         *session = None;
@@ -254,11 +283,14 @@ fn test_record_token_usage_aggregates_session_and_turn() {
         *session = None;
     }
     reset_counters();
+    crate::env::remove_var("JCODE_TELEMETRY");
 }
 
 #[test]
 fn test_record_connection_type_buckets_transport() {
     let _guard = lock_telemetry_test_state();
+    let _env_guard = lock_test_env();
+    crate::env::set_var("JCODE_TELEMETRY", "1");
     reset_counters();
     if let Ok(mut session) = SESSION_STATE.lock() {
         *session = None;
@@ -285,6 +317,7 @@ fn test_record_connection_type_buckets_transport() {
         *session = None;
     }
     reset_counters();
+    crate::env::remove_var("JCODE_TELEMETRY");
 }
 
 #[test]
