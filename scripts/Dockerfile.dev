@@ -1,0 +1,74 @@
+# Development image for building and running jcode inside Docker.
+# Used by scripts/docker_dev.sh.
+#
+# The image includes the full Rust toolchain, fast linker (lld), sccache,
+# and an OpenSSH server so you can connect via `ssh` or an IDE Remote-SSH
+# extension.
+#
+# Supported platforms: linux/amd64, linux/arm64
+
+FROM ubuntu:22.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+# ---------- system packages ----------
+RUN apt-get update -qq && \
+    apt-get install -y -qq \
+      build-essential \
+      ca-certificates \
+      clang \
+      curl \
+      git \
+      libssl-dev \
+      lld \
+      openssh-server \
+      pkg-config \
+      sudo \
+    && rm -rf /var/lib/apt/lists/*
+
+# ---------- sccache (multi-arch) ----------
+RUN set -eux; \
+    SCCACHE_VER=v0.8.2; \
+    case "$(uname -m)" in \
+      x86_64)  SCCACHE_ARCH=x86_64-unknown-linux-musl ;; \
+      aarch64) SCCACHE_ARCH=aarch64-unknown-linux-musl ;; \
+      *) echo "sccache: no prebuilt binary for $(uname -m) — skipping"; exit 0 ;; \
+    esac; \
+    curl -fsSL "https://github.com/mozilla/sccache/releases/download/${SCCACHE_VER}/sccache-${SCCACHE_VER}-${SCCACHE_ARCH}.tar.gz" \
+      | tar xz -C /usr/local/bin --strip-components=1 "sccache-${SCCACHE_VER}-${SCCACHE_ARCH}/sccache"; \
+    chmod +x /usr/local/bin/sccache
+
+# ---------- SSH setup ----------
+# Allow root login with public-key auth only; password auth disabled.
+# Host keys are pre-generated so the first sshd start has no warnings.
+RUN mkdir -p /run/sshd /root/.ssh \
+    && chmod 700 /root/.ssh \
+    && sed -i 's/#PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config \
+    && sed -i 's/#PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_config \
+    && sed -i 's/#PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config \
+    && ssh-keygen -A
+
+# ---------- Rust toolchain ----------
+ENV RUSTUP_HOME=/root/.rustup \
+    CARGO_HOME=/root/.cargo \
+    PATH=/root/.cargo/bin:$PATH
+
+RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --profile minimal --default-toolchain stable
+
+# ---------- Cargo config: sccache + fast linker ----------
+RUN set -eux; \
+    mkdir -p /root/.cargo; \
+    printf '[build]\nrustc-wrapper = "sccache"\n' > /root/.cargo/config.toml; \
+    case "$(uname -m)" in \
+      x86_64) \
+        printf '\n[target.x86_64-unknown-linux-gnu]\nlinker = "clang"\nrustflags = ["-C", "link-arg=-fuse-ld=lld"]\n' \
+          >> /root/.cargo/config.toml ;; \
+      aarch64) \
+        printf '\n[target.aarch64-unknown-linux-gnu]\nlinker = "clang"\nrustflags = ["-C", "link-arg=-fuse-ld=lld"]\n' \
+          >> /root/.cargo/config.toml ;; \
+    esac
+
+# ---------- working directory ----------
+WORKDIR /work
+
+CMD ["/bin/bash", "-l"]

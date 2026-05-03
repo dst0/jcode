@@ -770,3 +770,145 @@ scripts/install_release.sh
 | **Windows** x86_64 | Supported (native + WSL2) |
 
 </div>
+
+---
+
+## Docker Development Environment
+
+`scripts/docker_dev.sh` builds jcode inside a Docker container and keeps the
+container's network wired directly to the host so that local LLM servers,
+OAuth callbacks, and any other `localhost` service are reachable at `127.0.0.1`
+inside the container, exactly as on the host (using `--network=host` on Linux).
+
+### Quick start
+
+```bash
+# 1. Build the Docker image and open an interactive shell
+scripts/docker_dev.sh
+
+# 2. Inside the container – build and install jcode
+scripts/dev_cargo.sh build --release -p jcode --bin jcode
+scripts/install_release.sh   # installs to /root/.local/bin/jcode
+
+# 3. Verify
+jcode --version
+```
+
+Or do steps 2–3 automatically in one command:
+
+```bash
+scripts/docker_dev.sh --install
+```
+
+### Provider / credential configuration
+
+Your existing credentials and provider config are mounted **read-write** into
+the container automatically:
+
+| Host path | Container path | Contains |
+|---|---|---|
+| `~/.jcode` | `/root/.jcode` | auth tokens, sessions, config.toml |
+| `~/.config/jcode` | `/root/.config/jcode` | provider env files, MCP config |
+
+This means any provider you have set up on the host works immediately inside
+the container without re-authenticating.
+
+To add or switch providers inside the container, use the same commands as usual:
+
+```bash
+# Interactive login (browser opens on the host because the network is shared)
+jcode login --provider claude
+
+# Or configure a local/LAN model server
+jcode provider add local-llm \
+  --base-url http://localhost:8000/v1 \
+  --model my-model \
+  --no-api-key \
+  --set-default
+```
+
+Pass extra environment variables from the host:
+
+```bash
+scripts/docker_dev.sh --env OPENROUTER_API_KEY=sk-... --env ANTHROPIC_API_KEY=sk-...
+```
+
+### Host-port access
+
+On **Linux** the container shares the host network namespace (`--network=host`):
+every service listening on `localhost` on the host is equally reachable inside
+the container.
+
+On **macOS / Windows** Docker runs inside a VM, so `--network=host` only spans
+the VM boundary.  The script automatically adds `host.docker.internal` as a
+hostname that resolves to the host machine.  Update your provider base URLs to
+use that hostname instead of `127.0.0.1`:
+
+```bash
+jcode provider add local-llm \
+  --base-url http://host.docker.internal:8000/v1 \
+  --model my-model \
+  --no-api-key
+```
+
+### SSH access
+
+Pass `--ssh` to start an OpenSSH daemon inside the container.  Your
+`~/.ssh/id_rsa.pub` is injected automatically as an authorised key (override
+with the `SSH_PUBKEY_FILE` env var).
+
+| Host networking | SSH port | Connect command |
+|---|---|---|
+| Linux (`--network=host`) | 2222 (container-internal, no `-p` publish needed) | `ssh -p 2222 root@localhost` |
+| macOS / Windows (bridge) | 2222 (published from container port 22) | `ssh -p 2222 root@localhost` |
+
+> **Note:** On Linux with `--network=host`, Docker's `-p` publish flags are
+> ignored.  The script automatically configures sshd to listen on port 2222
+> inside the container (avoiding a conflict with the host's own sshd on
+> port 22).
+
+```bash
+scripts/docker_dev.sh --ssh
+
+# Connect from another terminal or IDE
+ssh -p 2222 root@localhost
+
+# VS Code Remote-SSH: add this to ~/.ssh/config
+#   Host jcode-dev
+#     HostName localhost
+#     Port 2222
+#     User root
+```
+
+SSH is useful for IDE integrations (VS Code Remote-SSH, JetBrains Gateway) and
+remote access from another machine on the same network.
+
+### Useful commands
+
+| Command | Effect |
+|---|---|
+| `scripts/docker_dev.sh` | Start container + open shell (builds image if needed) |
+| `scripts/docker_dev.sh --build-only` | Rebuild the Docker image and exit |
+| `scripts/docker_dev.sh --install` | Build + install jcode, then attach |
+| `scripts/docker_dev.sh --ssh` | Also start SSH daemon (port 2222) |
+| `scripts/docker_dev.sh --exec` | Open extra shell in running container |
+| `scripts/docker_dev.sh --stop` | Stop and remove the container |
+| `scripts/docker_dev.sh --env K=V` | Pass extra env var into container |
+
+### Build cache
+
+Cargo registry, git sources, sccache objects, and the compiled `target/`
+directory are stored under `~/.cache/jcode-docker-dev/` on the host.
+Override with `JCODE_DEV_CACHE_DIR`.  This means builds after the first one
+are fast even if you recreate the container.
+
+### Environment variables
+
+| Variable | Default | Description |
+|---|---|---|
+| `JCODE_DEV_IMAGE` | `jcode-dev` | Docker image tag |
+| `JCODE_DEV_CONTAINER` | `jcode-dev` | Container name |
+| `JCODE_DEV_CACHE_DIR` | `~/.cache/jcode-docker-dev` | Build-cache root on host |
+| `SSH_PUBKEY_FILE` | `~/.ssh/id_rsa.pub` | Public key injected for SSH |
+| `JCODE_DEV_EXTRA_MOUNTS` | _(none)_ | Space-separated extra `-v` mount specs |
+
