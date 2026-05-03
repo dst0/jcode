@@ -223,8 +223,15 @@ function Stop-JcodeHotkeyListeners {
         $procs = Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe' OR Name = 'pwsh.exe'" -ErrorAction SilentlyContinue |
             Where-Object { $_.CommandLine -like '*jcode-hotkey*' }
         foreach ($p in $procs) {
-            Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
-            Write-Info "✅ stopped hotkey listener process (PID $($p.ProcessId))"
+            $stopSuccess = $true
+            try {
+                Stop-Process -Id $p.ProcessId -Force -ErrorAction Stop
+            } catch {
+                $stopSuccess = $false
+            }
+            if ($stopSuccess) {
+                Write-Info "✅ stopped hotkey listener process (PID $($p.ProcessId))"
+            }
         }
     } catch {}
 }

@@ -92,14 +92,14 @@ elif curl -fsSL "$URL_BIN" -o "$tmpdir/jcode.download" 2>/dev/null; then
 fi
 
 mkdir -p "$INSTALL_DIR" "$stable_dir" "$current_dir" "$version_dir"
-info "✅ dir: $INSTALL_DIR"
-info "✅ dir: $stable_dir"
-info "✅ dir: $current_dir"
+info "✅ ensured directory: $INSTALL_DIR"
+info "✅ ensured directory: $stable_dir"
+info "✅ ensured directory: $current_dir"
 
 version="${VERSION#v}"
 dest_version_dir="$version_dir/$version"
 mkdir -p "$dest_version_dir"
-info "✅ dir: $dest_version_dir"
+info "✅ ensured directory: $dest_version_dir"
 
 bin_name="jcode${EXE}"
 
@@ -222,7 +222,9 @@ else
       fi
     done
 
-    info "✅ added $INSTALL_DIR to PATH in:$added_to"
+    if [ -n "$added_to" ]; then
+      info "✅ added $INSTALL_DIR to PATH in:$added_to"
+    fi
   fi
 
   echo ""
