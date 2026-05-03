@@ -42,6 +42,14 @@ while [[ $# -gt 0 ]]; do
 done
 
 OS="$(uname -s)"
+case "$OS" in
+  Linux|Darwin)
+    ;;
+  *)
+    warn "Treating unsupported OS '$OS' as a generic Unix uninstall target"
+    ;;
+esac
+
 INSTALL_DIR="${JCODE_INSTALL_DIR:-$HOME/.local/bin}"
 JCODE_DIR="${JCODE_HOME:-$HOME/.jcode}"
 
@@ -145,7 +153,6 @@ clean_rc_file() {
       }
       next
     }
-    $0 == path_line { next }
     { print }
   ' "$rc" > "$tmp"
 
@@ -204,7 +211,7 @@ unload_macos_hotkey_agent() {
   fi
 
   if ! launchctl bootout "gui/$(id -u)" "$plist" >/dev/null 2>&1; then
-    # Fallback for older macOS versions that do not support `bootout`.
+    # Fallback for macOS 10.10 and earlier, where `bootout` is unavailable.
     launchctl unload "$plist" >/dev/null 2>&1 || true
   fi
 }
