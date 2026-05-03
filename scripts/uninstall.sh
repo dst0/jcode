@@ -50,7 +50,7 @@ case "$OS" in
     ;;
 esac
 
-INSTALL_DIR="${JCODE_INSTALL_DIR:-$HOME/.local/bin}"
+BIN_DIR="${JCODE_INSTALL_DIR:-$HOME/.local/bin}"
 JCODE_DIR="${JCODE_HOME:-$HOME/.jcode}"
 
 if [[ -n "${JCODE_HOME:-}" ]]; then
@@ -61,8 +61,8 @@ else
   APP_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/jcode"
 fi
 
-launcher_path="$INSTALL_DIR/jcode"
-path_line="export PATH=\"$INSTALL_DIR:\$PATH\""
+launcher_path="$BIN_DIR/jcode"
+path_line="export PATH=\"$BIN_DIR:\$PATH\""
 installer_marker="# Added by jcode installer"
 
 runtime_dir=""
@@ -125,7 +125,7 @@ prune_dir_if_empty() {
   if [[ ! -d "$path" ]]; then
     return 0
   fi
-  if find "$path" -mindepth 1 -print -quit 2>/dev/null | grep -q .; then
+  if [[ -n "$(find "$path" -mindepth 1 -print -quit 2>/dev/null)" ]]; then
     return 0
   fi
   if [[ "$DRY_RUN" = true ]]; then
@@ -211,7 +211,7 @@ unload_macos_hotkey_agent() {
   fi
 
   if ! launchctl bootout "gui/$(id -u)" "$plist" >/dev/null 2>&1; then
-    # Fallback for macOS 10.10 and earlier, where `bootout` is unavailable.
+    # Fallback retained for backwards compatibility with older macOS releases.
     launchctl unload "$plist" >/dev/null 2>&1 || true
   fi
 }
@@ -246,8 +246,8 @@ do
   clean_rc_file "$rc"
 done
 
-prune_dir_if_empty "$INSTALL_DIR"
-if [[ "$INSTALL_DIR" = "$HOME/.local/bin" ]]; then
+prune_dir_if_empty "$BIN_DIR"
+if [[ "$BIN_DIR" = "$HOME/.local/bin" ]]; then
   prune_dir_if_empty "$HOME/.local"
 fi
 
