@@ -1,6 +1,8 @@
 # jcode Telemetry
 
-jcode collects **anonymous, minimal usage statistics** to help understand how many people use jcode, what providers/models are popular, whether onboarding works, which feature families are used, how often sessions succeed, and whether performance/regressions are improving. This data helps prioritize development without collecting prompts or code.
+**Telemetry is opt-in and disabled by default.** No data is sent unless you explicitly enable it.
+
+When enabled, jcode collects **anonymous, minimal usage statistics** to help understand how many people use jcode, what providers/models are popular, whether onboarding works, which feature families are used, how often sessions succeed, and whether performance/regressions are improving. This data helps prioritize development without collecting prompts or code.
 
 Recent telemetry additions also include: coarse onboarding steps, explicit thumbs-up / thumbs-down feedback, build-channel / dev-mode cleanup flags, session/workflow/tool-category summaries, coarse project language buckets, retention helpers like active days in the last 7 / 30 days, workflow cadence fields for session timing and multi-sessioning, and privacy-safe per-turn timing/outcome metrics.
 
@@ -196,7 +198,7 @@ Most events also carry a few coarse quality / cleanup fields:
 
 The UUID is randomly generated on first run and stored at `~/.jcode/telemetry_id`. It is not derived from your machine, username, email, or any identifiable information.
 
-## How It Works
+## How It Works (when enabled)
 
 1. On first launch, jcode generates a random UUID and sends an `install` event
 2. When a session begins, jcode sends a `session_start` event
@@ -210,9 +212,21 @@ The UUID is randomly generated on first run and stored at `~/.jcode/telemetry_id
 
 The telemetry endpoint is a Cloudflare Worker that stores events in a D1 database. The source code for the worker is in [`telemetry-worker/`](./telemetry-worker/).
 
-## How to Opt Out
+## How to Opt In
 
-Any of these methods will disable telemetry completely:
+Telemetry is **disabled by default**. To enable it, use one of:
+
+```bash
+# Option 1: Environment variable
+export JCODE_TELEMETRY=1
+
+# Option 2: File-based opt-in
+touch ~/.jcode/telemetry_enabled
+```
+
+## How to Opt Out (if previously opted in)
+
+If you have enabled telemetry and want to disable it again, any of these methods will disable it completely:
 
 ```bash
 # Option 1: Environment variable
@@ -225,7 +239,7 @@ export DO_NOT_TRACK=1
 touch ~/.jcode/no_telemetry
 ```
 
-When opted out, zero network requests are made. The telemetry module short-circuits immediately.
+Opt-out signals always override opt-in signals. When telemetry is disabled, zero network requests are made. The telemetry module short-circuits immediately.
 
 ## Verification
 
