@@ -704,10 +704,29 @@ irm https://raw.githubusercontent.com/1jehuang/jcode/master/scripts/install.ps1 
 curl -fsSL https://raw.githubusercontent.com/1jehuang/jcode/master/scripts/uninstall.sh | bash
 ```
 
-This removes the launcher, `~/.jcode`, jcode's app config directory, installer-added
-PATH entries, and macOS launcher/hotkey files created by jcode. Use
-`curl -fsSL https://raw.githubusercontent.com/1jehuang/jcode/master/scripts/uninstall.sh | bash -s -- --yes`
-to skip the confirmation prompt.
+The uninstall script stops all running jcode processes (server, client, and
+hotkey daemon) before removing any files. It then removes:
+
+- the `jcode` launcher binary
+- `~/.jcode` (builds, sessions, logs, credentials)
+- jcode's app config directory (`~/Library/Application Support/jcode` on macOS,
+  `~/.config/jcode` on Linux)
+- installer-added `PATH` entries from shell RC files
+- macOS-specific files: the `Jcode.app` launcher bundle (unregistered from
+  Launch Services first), the `com.jcode.hotkey` LaunchAgent, and the
+  `~/.jcode/hotkey/` support directory
+- runtime artifacts: Unix domain sockets, daemon lock file, and reload marker
+
+Use `--yes` to skip the confirmation prompt, or `--dry-run` to preview what
+would be removed without changing anything:
+
+```bash
+# skip confirmation
+curl -fsSL https://raw.githubusercontent.com/1jehuang/jcode/master/scripts/uninstall.sh | bash -s -- --yes
+
+# preview only
+curl -fsSL https://raw.githubusercontent.com/1jehuang/jcode/master/scripts/uninstall.sh | bash -s -- --dry-run
+```
 
 ### macOS via Homebrew
 
