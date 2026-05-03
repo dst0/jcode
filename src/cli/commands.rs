@@ -19,7 +19,8 @@ pub(crate) use super::auth_test::run_post_login_validation;
 #[cfg(test)]
 pub(crate) use super::auth_test::{
     AuthTestChoicePlan, AuthTestTarget, ResolvedAuthTestTarget, auth_test_choice_plan,
-    auth_test_error_is_retryable, configured_auth_test_targets, resolve_auth_test_targets,
+    auth_test_error_indicates_missing_tool_support, auth_test_error_is_retryable,
+    configured_auth_test_targets, resolve_auth_test_targets,
 };
 pub(crate) use provider_setup::{ProviderAddOptions, run_provider_add_command};
 pub use restart::{

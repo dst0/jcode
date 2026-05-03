@@ -189,6 +189,7 @@ pub(crate) struct OpenRouterStream {
     pub(crate) buffer: String,
     pending: VecDeque<StreamEvent>,
     current_tool_call: Option<ToolCallAccumulator>,
+    think_router: ThinkRouter,
     /// Track if we've emitted the provider info (only emit once)
     provider_emitted: bool,
     model: String,
@@ -213,6 +214,7 @@ impl OpenRouterStream {
             buffer: String::new(),
             pending: VecDeque::new(),
             current_tool_call: None,
+            think_router: ThinkRouter::default(),
             provider_emitted: false,
             model,
             provider_pin,
@@ -258,6 +260,10 @@ impl OpenRouterStream {
         }
     }
 
+    fn push_text_events(&mut self, content: &str) {
+        self.pending.extend(self.think_router.push_chunk(content));
+    }
+
     pub(crate) fn parse_next_event(&mut self) -> Option<StreamEvent> {
         if let Some(event) = self.pending.pop_front() {
             return Some(event);
@@ -281,7 +287,11 @@ impl OpenRouterStream {
             };
 
             if data == "[DONE]" {
-                return Some(StreamEvent::MessageEnd { stop_reason: None });
+                let trailing_events = self.think_router.finish();
+                self.pending.extend(trailing_events);
+                self.pending
+                    .push_back(StreamEvent::MessageEnd { stop_reason: None });
+                return self.pending.pop_front();
             }
 
             let parsed: Value = match serde_json::from_str(data) {
@@ -342,8 +352,7 @@ impl OpenRouterStream {
                     if let Some(content) = delta.get("content").and_then(|c| c.as_str())
                         && !content.is_empty()
                     {
-                        self.pending
-                            .push_back(StreamEvent::TextDelta(content.to_string()));
+                        self.push_text_events(content);
                     }
 
                     // Tool calls
@@ -491,6 +500,8 @@ impl Stream for OpenRouterStream {
                     return Poll::Ready(Some(Err(anyhow::anyhow!("Stream error: {}", e))));
                 }
                 Poll::Ready(None) => {
+                    let trailing_events = self.think_router.finish();
+                    self.pending.extend(trailing_events);
                     // Stream ended - emit any pending tool call
                     if let Some(tc) = self.current_tool_call.take()
                         && !tc.id.is_empty()
@@ -516,6 +527,95 @@ impl Stream for OpenRouterStream {
     }
 }
 
+#[derive(Default)]
+struct ThinkRouter {
+    in_think: bool,
+    carry: String,
+}
+
+impl ThinkRouter {
+    fn push_chunk(&mut self, chunk: &str) -> Vec<StreamEvent> {
+        self.route(Some(chunk))
+    }
+
+    fn finish(&mut self) -> Vec<StreamEvent> {
+        self.route(None)
+    }
+
+    fn route(&mut self, chunk: Option<&str>) -> Vec<StreamEvent> {
+        if let Some(chunk) = chunk {
+            self.carry.push_str(chunk);
+        }
+        let mut events = Vec::new();
+        loop {
+            if self.in_think {
+                if let Some(idx) = self.carry.find("</think>") {
+                    let text = self.carry[..idx].to_string();
+                    if !text.is_empty() {
+                        events.push(StreamEvent::ThinkingDelta(text));
+                    }
+                    events.push(StreamEvent::ThinkingEnd);
+                    self.carry = self.carry[idx + "</think>".len()..].to_string();
+                    self.in_think = false;
+                    continue;
+                }
+                let split = carry_boundary(&self.carry, "</think>");
+                if split > 0 {
+                    let text = self.carry[..split].to_string();
+                    if !text.is_empty() {
+                        events.push(StreamEvent::ThinkingDelta(text));
+                    }
+                    self.carry = self.carry[split..].to_string();
+                }
+                break;
+            }
+
+            if let Some(idx) = self.carry.find("<think>") {
+                let text = self.carry[..idx].to_string();
+                if !text.is_empty() {
+                    events.push(StreamEvent::TextDelta(text));
+                }
+                events.push(StreamEvent::ThinkingStart);
+                self.carry = self.carry[idx + "<think>".len()..].to_string();
+                self.in_think = true;
+                continue;
+            }
+
+            let split = carry_boundary(&self.carry, "<think>");
+            if split > 0 {
+                let text = self.carry[..split].to_string();
+                if !text.is_empty() {
+                    events.push(StreamEvent::TextDelta(text));
+                }
+                self.carry = self.carry[split..].to_string();
+            }
+            break;
+        }
+
+        if chunk.is_none() && !self.carry.is_empty() {
+            if self.in_think {
+                events.push(StreamEvent::ThinkingDelta(std::mem::take(&mut self.carry)));
+                events.push(StreamEvent::ThinkingEnd);
+                self.in_think = false;
+            } else {
+                events.push(StreamEvent::TextDelta(std::mem::take(&mut self.carry)));
+            }
+        }
+
+        events
+    }
+}
+
+fn carry_boundary(text: &str, marker: &str) -> usize {
+    let max = marker.len().saturating_sub(1).min(text.len());
+    for keep in (1..=max).rev() {
+        if text.ends_with(&marker[..keep]) {
+            return text.len() - keep;
+        }
+    }
+    text.len()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -538,5 +638,47 @@ mod tests {
         assert!(event.is_none());
         assert!(stream.pending.is_empty());
         assert!(stream.current_tool_call.is_none());
+    }
+
+    #[test]
+    fn parse_next_event_routes_split_think_blocks_out_of_text_content() {
+        let provider_pin = Arc::new(std::sync::Mutex::new(None));
+        let mut stream = OpenRouterStream::new(
+            futures::stream::empty(),
+            "test-model".to_string(),
+            provider_pin,
+        );
+        stream.buffer = concat!(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"hello<thi\"}}]}\n\n",
+            "data: {\"choices\":[{\"delta\":{\"content\":\"nk>secret</think>world\"}}]}\n\n",
+            "data: [DONE]\n\n"
+        )
+        .to_string();
+
+        assert!(matches!(
+            stream.parse_next_event(),
+            Some(StreamEvent::TextDelta(text)) if text == "hello"
+        ));
+        assert!(matches!(
+            stream.parse_next_event(),
+            Some(StreamEvent::ThinkingStart)
+        ));
+        assert!(matches!(
+            stream.parse_next_event(),
+            Some(StreamEvent::ThinkingDelta(text)) if text == "secret"
+        ));
+        assert!(matches!(
+            stream.parse_next_event(),
+            Some(StreamEvent::ThinkingEnd)
+        ));
+        assert!(matches!(
+            stream.parse_next_event(),
+            Some(StreamEvent::TextDelta(text)) if text == "world"
+        ));
+        assert!(matches!(
+            stream.parse_next_event(),
+            Some(StreamEvent::MessageEnd { stop_reason: None })
+        ));
+        assert!(stream.parse_next_event().is_none());
     }
 }

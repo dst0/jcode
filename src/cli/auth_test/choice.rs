@@ -193,6 +193,20 @@ pub(crate) fn auth_test_error_is_retryable(err: &anyhow::Error) -> bool {
     .any(|needle| text.contains(needle))
 }
 
+pub(crate) fn auth_test_error_indicates_missing_tool_support(err: &anyhow::Error) -> bool {
+    let text = format!("{err:#}").to_ascii_lowercase();
+    [
+        "does not support tools",
+        "does not support tool calling",
+        "does not support function calling",
+        "tool use is not supported",
+        "tools are not supported",
+        "function calling is not supported",
+    ]
+    .iter()
+    .any(|needle| text.contains(needle))
+}
+
 fn print_auth_test_reports(reports: &[AuthTestProviderReport]) {
     for report in reports {
         println!("=== auth-test: {} ===", report.provider);

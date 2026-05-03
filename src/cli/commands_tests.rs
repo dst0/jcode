@@ -234,6 +234,20 @@ fn auth_test_retryable_error_detection_rejects_schema_errors() {
     assert!(!auth_test_error_is_retryable(&err));
 }
 
+#[test]
+fn auth_test_tool_support_detection_handles_ollama_style_errors() {
+    let err = anyhow::anyhow!(
+        "API error (400 Bad Request): {{\"error\":{{\"message\":\"registry.ollama.ai/library/qwen3.6-35b-64k:latest does not support tools\"}}}}"
+    );
+    assert!(auth_test_error_indicates_missing_tool_support(&err));
+}
+
+#[test]
+fn auth_test_tool_support_detection_rejects_other_bad_requests() {
+    let err = anyhow::anyhow!("API error (400 Bad Request): invalid request payload");
+    assert!(!auth_test_error_indicates_missing_tool_support(&err));
+}
+
 #[tokio::test]
 async fn auth_test_choice_plan_preserves_explicit_model_for_local_provider() {
     let plan = auth_test_choice_plan(
