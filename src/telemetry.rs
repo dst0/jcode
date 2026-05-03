@@ -2042,11 +2042,11 @@ pub enum ErrorCategory {
 
 fn show_first_run_notice() {
     eprintln!("\x1b[90m");
-    eprintln!("  Telemetry is opt-in and currently enabled.");
+    eprintln!("  Telemetry has been explicitly enabled (JCODE_TELEMETRY=1 or telemetry_enabled).");
     eprintln!("  jcode may collect anonymous usage statistics (install count, version, OS,");
     eprintln!("  session activity, tool counts, and crash/exit reasons). No code, filenames,");
     eprintln!("  prompts, or personal data is sent.");
-    eprintln!("  To opt out: export JCODE_NO_TELEMETRY=1");
+    eprintln!("  To disable: export JCODE_NO_TELEMETRY=1");
     eprintln!("  Details: https://github.com/1jehuang/jcode/blob/master/TELEMETRY.md");
     eprintln!("\x1b[0m");
 }
