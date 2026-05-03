@@ -101,20 +101,15 @@ remove_path() {
   info "removed $path"
 }
 
-remove_glob() {
-  local pattern="$1"
-  shopt -s nullglob
-  local matches=( $pattern )
-  shopt -u nullglob
-
-  if [[ ${#matches[@]} -eq 0 ]]; then
-    return 0
-  fi
+remove_glob_in_dir() {
+  local dir="$1"
+  local pattern="$2"
+  [[ -d "$dir" ]] || return 0
 
   local path
-  for path in "${matches[@]}"; do
+  while IFS= read -r -d '' path; do
     remove_path "$path"
-  done
+  done < <(find "$dir" -mindepth 1 -maxdepth 1 -name "$pattern" -print0 2>/dev/null)
 }
 
 prune_dir_if_empty() {
@@ -208,8 +203,9 @@ unload_macos_hotkey_agent() {
     return 0
   fi
 
-  launchctl bootout "gui/$(id -u)" "$plist" >/dev/null 2>&1 || true
-  launchctl unload "$plist" >/dev/null 2>&1 || true
+  if ! launchctl bootout "gui/$(id -u)" "$plist" >/dev/null 2>&1; then
+    launchctl unload "$plist" >/dev/null 2>&1 || true
+  fi
 }
 
 confirm
@@ -228,8 +224,8 @@ fi
 for target in "${runtime_targets[@]}"; do
   remove_path "$target"
 done
-remove_glob "$runtime_dir/browser-session-"'*.sock'
-remove_glob "$runtime_dir/browser-session-"'*.pid'
+remove_glob_in_dir "$runtime_dir" 'browser-session-*.sock'
+remove_glob_in_dir "$runtime_dir" 'browser-session-*.pid'
 
 for rc in \
   "$HOME/.zshenv" \
