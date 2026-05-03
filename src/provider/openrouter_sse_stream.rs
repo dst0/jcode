@@ -287,7 +287,8 @@ impl OpenRouterStream {
             };
 
             if data == "[DONE]" {
-                self.pending.extend(self.think_router.finish());
+                let trailing_events = self.think_router.finish();
+                self.pending.extend(trailing_events);
                 self.pending
                     .push_back(StreamEvent::MessageEnd { stop_reason: None });
                 return self.pending.pop_front();
@@ -499,7 +500,8 @@ impl Stream for OpenRouterStream {
                     return Poll::Ready(Some(Err(anyhow::anyhow!("Stream error: {}", e))));
                 }
                 Poll::Ready(None) => {
-                    self.pending.extend(self.think_router.finish());
+                    let trailing_events = self.think_router.finish();
+                    self.pending.extend(trailing_events);
                     // Stream ended - emit any pending tool call
                     if let Some(tc) = self.current_tool_call.take()
                         && !tc.id.is_empty()
