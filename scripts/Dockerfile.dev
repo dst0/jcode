@@ -39,7 +39,8 @@ RUN set -eux; \
     chmod +x /usr/local/bin/sccache
 
 # ---------- SSH setup ----------
-# Allow root login with public-key auth only; password auth disabled.
+# Root login is allowed with public-key auth only; password auth is disabled.
+# Authorized keys are injected at runtime by scripts/docker_dev.sh (--ssh flag).
 # Host keys are pre-generated so the first sshd start has no warnings.
 RUN mkdir -p /run/sshd /root/.ssh \
     && chmod 700 /root/.ssh \

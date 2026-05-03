@@ -28,7 +28,7 @@
 #
 # SSH access (--ssh flag):
 #   The container's SSH daemon listens on host port 2222.
-#   Authorised key:  ~/.ssh/id_rsa.pub (or override with SSH_PUBKEY_FILE env).
+#   Authorized key:  ~/.ssh/id_rsa.pub (or override with SSH_PUBKEY_FILE env).
 #   Connect with:   ssh -p 2222 root@localhost
 #   VS Code:        Remote-SSH → root@localhost:2222
 #
@@ -202,7 +202,7 @@ if [[ "$ENABLE_SSH" == true ]]; then
     SSHD_PORT=2222
   fi
 
-  # Inject authorised key
+  # Inject authorized key
   if [[ -f "$SSH_PUBKEY_FILE" ]]; then
     PUBKEY="$(cat "$SSH_PUBKEY_FILE")"
     SSH_SETUP_CMDS+=(
@@ -210,7 +210,7 @@ if [[ "$ENABLE_SSH" == true ]]; then
       "echo '$PUBKEY' >> /root/.ssh/authorized_keys"
       "chmod 600 /root/.ssh/authorized_keys"
     )
-    info "SSH enabled on host port $SSHD_PORT (authorised key: $SSH_PUBKEY_FILE)"
+    info "SSH enabled on host port $SSHD_PORT (authorized key: $SSH_PUBKEY_FILE)"
     info "Connect with: ssh -p $SSHD_PORT root@localhost"
   else
     warn "SSH requested but no public key found at $SSH_PUBKEY_FILE"

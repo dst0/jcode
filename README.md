@@ -854,7 +854,7 @@ jcode provider add local-llm \
 ### SSH access
 
 Pass `--ssh` to start an OpenSSH daemon inside the container.  Your
-`~/.ssh/id_rsa.pub` is injected automatically as an authorised key (override
+`~/.ssh/id_rsa.pub` is injected automatically as an authorized key (override
 with the `SSH_PUBKEY_FILE` env var).
 
 | Host networking | SSH port | Connect command |
