@@ -204,6 +204,7 @@ unload_macos_hotkey_agent() {
   fi
 
   if ! launchctl bootout "gui/$(id -u)" "$plist" >/dev/null 2>&1; then
+    # Fallback for older macOS versions that do not support `bootout`.
     launchctl unload "$plist" >/dev/null 2>&1 || true
   fi
 }
