@@ -135,8 +135,7 @@ prune_dir_if_empty() {
     info "would remove empty directory $path"
     return 0
   fi
-  rmdir "$path" 2>/dev/null || true
-  info "removed empty directory $path"
+  rmdir "$path" 2>/dev/null && info "removed empty directory $path" || true
 }
 
 clean_rc_file() {

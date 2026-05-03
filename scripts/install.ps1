@@ -372,7 +372,7 @@ function Install-JcodeHotkey([string]$JcodeExePath) {
     if ($LASTEXITCODE -ne 0) {
         Write-Warn "Hotkey will start on next login, but could not be launched immediately"
     } else {
-        Write-Info "launched hotkey listener (Alt+; is now active)"
+        Write-Info "launched hotkey listener process (Alt+; will be active shortly)"
     }
 
     Write-Info "Configured Alt+; to launch jcode in Alacritty"
