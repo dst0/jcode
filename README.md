@@ -697,6 +697,18 @@ curl -fsSL https://raw.githubusercontent.com/1jehuang/jcode/master/scripts/insta
 irm https://raw.githubusercontent.com/1jehuang/jcode/master/scripts/install.ps1 | iex
 ```
 
+### Quick Uninstall
+
+```bash
+# macOS & Linux
+curl -fsSL https://raw.githubusercontent.com/1jehuang/jcode/master/scripts/uninstall.sh | bash
+```
+
+This removes the launcher, `~/.jcode`, jcode's app config directory, installer-added
+PATH entries, and macOS launcher/hotkey files created by jcode. Use
+`curl -fsSL https://raw.githubusercontent.com/1jehuang/jcode/master/scripts/uninstall.sh | bash -s -- --yes`
+to skip the confirmation prompt.
+
 ### macOS via Homebrew
 
 ```bash
