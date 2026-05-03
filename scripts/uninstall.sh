@@ -109,7 +109,7 @@ remove_path() {
   fi
 
   rm -rf -- "$path"
-  info "removed $path"
+  info "✅ removed $path"
 }
 
 remove_glob_in_dir() {
@@ -135,7 +135,7 @@ prune_dir_if_empty() {
     info "would remove empty directory $path"
     return 0
   fi
-  rmdir "$path" 2>/dev/null && info "removed empty directory $path" || true
+  rmdir "$path" 2>/dev/null && info "✅ removed empty directory $path" || true
 }
 
 clean_rc_file() {
@@ -169,7 +169,7 @@ clean_rc_file() {
 
   cat "$tmp" > "$rc"
   rm -f "$tmp"
-  info "cleaned PATH entry from $rc"
+  info "✅ cleaned PATH entry from $rc"
 }
 
 confirm() {
@@ -221,14 +221,14 @@ unload_macos_hotkey_agent() {
       # Fallback retained for backwards compatibility with pre-10.11 macOS.
       launchctl unload "$plist" >/dev/null 2>&1 || true
     fi
-    info "unloaded LaunchAgent com.jcode.hotkey (via $plist)"
+    info "✅ unloaded LaunchAgent com.jcode.hotkey (via $plist)"
     unloaded=true
   fi
 
   # Also unload by service label so the agent is stopped even if the plist was
   # already deleted (e.g. a previous partial uninstall).
   if launchctl bootout "gui/$(id -u)/com.jcode.hotkey" >/dev/null 2>&1; then
-    info "unloaded LaunchAgent service com.jcode.hotkey"
+    info "✅ unloaded LaunchAgent service com.jcode.hotkey"
     unloaded=true
   fi
 
@@ -263,7 +263,7 @@ unregister_macos_app_launcher() {
       info "would unregister $app_dir from Launch Services"
     else
       "$lsregister" -u "$app_dir" >/dev/null 2>&1 || true
-      info "unregistered $app_dir from Launch Services"
+      info "✅ unregistered $app_dir from Launch Services"
     fi
   done
 }
@@ -289,7 +289,7 @@ stop_running_processes() {
   local pids
   pids="$(pgrep jcode 2>/dev/null | tr '\n' ' ' || true)"
   if pkill -TERM jcode 2>/dev/null; then
-    info "sent SIGTERM to jcode processes (PIDs: ${pids% }); waiting up to ${STOP_TIMEOUT} s…"
+    info "✅ sent SIGTERM to jcode processes (PIDs: ${pids% }); waiting up to ${STOP_TIMEOUT} s…"
     local i=0
     while pkill -0 jcode 2>/dev/null && [[ $i -lt $STOP_TIMEOUT ]]; do
       sleep 1
@@ -298,9 +298,9 @@ stop_running_processes() {
     local remaining
     remaining="$(pgrep jcode 2>/dev/null | tr '\n' ' ' || true)"
     if pkill -KILL jcode 2>/dev/null; then
-      info "force-killed remaining jcode processes (PIDs: ${remaining% })"
+      info "✅ force-killed remaining jcode processes (PIDs: ${remaining% })"
     else
-      info "all jcode processes exited cleanly after SIGTERM"
+      info "✅ all jcode processes exited cleanly after SIGTERM"
     fi
   else
     info "no running jcode processes found"
