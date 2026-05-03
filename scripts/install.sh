@@ -82,10 +82,13 @@ tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT
 
 download_mode=""
+info "Downloading $ARTIFACT from $VERSION..."
 if curl -fsSL "$URL_TGZ" -o "$tmpdir/jcode.download" 2>/dev/null; then
   download_mode="tar"
+  info "downloaded archive: $URL_TGZ"
 elif curl -fsSL "$URL_BIN" -o "$tmpdir/jcode.download" 2>/dev/null; then
   download_mode="bin"
+  info "downloaded binary: $URL_BIN"
 fi
 
 mkdir -p "$INSTALL_DIR" "$stable_dir" "$current_dir" "$version_dir"
@@ -116,10 +119,14 @@ else
   command -v cargo >/dev/null 2>&1 || err "cargo is required to build from source"
 
   src_dir="$tmpdir/jcode-src"
+  info "cloning $REPO at $VERSION..."
   git clone --depth 1 --branch "$VERSION" "https://github.com/$REPO.git" "$src_dir" \
     || err "Failed to clone $REPO at $VERSION"
+  info "cloned $REPO at $VERSION"
+  info "building jcode from source (this may take several minutes)..."
   cargo build --release --manifest-path "$src_dir/Cargo.toml" \
     || err "cargo build failed while building $REPO from source"
+  info "build complete"
 
   src_bin="$src_dir/target/release/$bin_name"
   [ -f "$src_bin" ] || err "Built binary not found at $src_bin"
@@ -128,6 +135,7 @@ else
 fi
 
 chmod +x "$dest_version_dir/$bin_name" 2>/dev/null || true
+info "set executable bit: $dest_version_dir/$bin_name"
 
 if [ "$IS_WINDOWS" = true ]; then
   cp -f "$dest_version_dir/$bin_name" "$stable_dir/$bin_name"

@@ -231,6 +231,7 @@ function Stop-JcodeHotkeyListeners {
 
 function Set-SetupHintsState([bool]$AlacrittyConfigured, [bool]$HotkeyConfigured) {
     New-Item -ItemType Directory -Path $JcodeHome -Force | Out-Null
+    Write-Info "ensured jcode home directory: $JcodeHome"
 
     $state = @{
         launch_count = 0
@@ -265,6 +266,7 @@ function Set-SetupHintsState([bool]$AlacrittyConfigured, [bool]$HotkeyConfigured
     }
 
     $state | ConvertTo-Json | Set-Content -Path $SetupHintsPath -Encoding UTF8
+    Write-Info "wrote setup hints: $SetupHintsPath"
 }
 
 function Install-JcodeHotkey([string]$JcodeExePath) {
@@ -345,6 +347,7 @@ function Install-JcodeHotkey([string]$JcodeExePath) {
 
     $startupDir = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Startup"
     New-Item -ItemType Directory -Path $startupDir -Force | Out-Null
+    Write-Info "ensured Startup directory: $startupDir"
     $startupShortcutPath = (Join-Path $startupDir "jcode-hotkey.lnk").Replace("'", "''")
     $escapedVbsPath = $vbsPath.Replace("'", "''")
 
@@ -545,6 +548,7 @@ if ($UserPath -notlike "*$InstallDir*") {
 }
 
 $env:Path = "$InstallDir;$env:Path"
+Write-Info "added $InstallDir to PATH for current session"
 
 $installedAlacritty = $false
 $configuredHotkey = $false

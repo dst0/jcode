@@ -215,18 +215,25 @@ unload_macos_hotkey_agent() {
   fi
 
   # Unload by file path when the plist still exists.
+  local unloaded=false
   if [[ -e "$plist" ]]; then
     if ! launchctl bootout "gui/$(id -u)" "$plist" >/dev/null 2>&1; then
       # Fallback retained for backwards compatibility with pre-10.11 macOS.
       launchctl unload "$plist" >/dev/null 2>&1 || true
     fi
     info "unloaded LaunchAgent com.jcode.hotkey (via $plist)"
+    unloaded=true
   fi
 
   # Also unload by service label so the agent is stopped even if the plist was
   # already deleted (e.g. a previous partial uninstall).
   if launchctl bootout "gui/$(id -u)/com.jcode.hotkey" >/dev/null 2>&1; then
     info "unloaded LaunchAgent service com.jcode.hotkey"
+    unloaded=true
+  fi
+
+  if [[ "$unloaded" = false ]]; then
+    info "no LaunchAgent com.jcode.hotkey to unload"
   fi
 }
 
@@ -292,7 +299,11 @@ stop_running_processes() {
     remaining="$(pgrep jcode 2>/dev/null | tr '\n' ' ' || true)"
     if pkill -KILL jcode 2>/dev/null; then
       info "force-killed remaining jcode processes (PIDs: ${remaining% })"
+    else
+      info "all jcode processes exited cleanly after SIGTERM"
     fi
+  else
+    info "no running jcode processes found"
   fi
 }
 
