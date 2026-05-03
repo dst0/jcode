@@ -6,7 +6,7 @@ usage() {
 Usage: uninstall.sh [--yes] [--dry-run]
 
 Remove jcode binaries, launchers, stored credentials, logs, and local state that
-come from the standard install script.
+come from the standard install script.  Running processes are stopped first.
 
 Options:
   --yes      Skip the confirmation prompt.
@@ -18,6 +18,9 @@ EOF
 info() { printf '\033[1;34m%s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33mwarning: %s\033[0m\n' "$*" >&2; }
 err()  { printf '\033[1;31merror: %s\033[0m\n' "$*" >&2; exit 1; }
+
+# Seconds to wait for jcode processes to exit after SIGTERM before SIGKILL.
+STOP_TIMEOUT=5
 
 DRY_RUN=false
 ASSUME_YES=false
@@ -172,7 +175,8 @@ clean_rc_file() {
 confirm() {
   [[ "$ASSUME_YES" = true ]] && return 0
 
-  echo "This will remove jcode binaries, state, credentials, and installer-added PATH entries."
+  echo "This will stop running jcode processes and remove binaries, state, credentials,"
+  echo "and installer-added PATH entries."
   echo ""
   echo "Paths targeted:"
   echo "  - $launcher_path"
@@ -184,6 +188,10 @@ confirm() {
       echo "  - $target"
     done
   fi
+  local rt
+  for rt in "${runtime_targets[@]}"; do
+    [[ -e "$rt" ]] && echo "  - $rt"
+  done
   echo ""
   printf 'Continue? [y/N] '
   read -r reply
@@ -200,21 +208,89 @@ confirm() {
 unload_macos_hotkey_agent() {
   [[ "$OS" = "Darwin" ]] || return 0
   local plist="$HOME/Library/LaunchAgents/com.jcode.hotkey.plist"
-  [[ -e "$plist" ]] || return 0
 
   if [[ "$DRY_RUN" = true ]]; then
-    info "would unload LaunchAgent $plist"
+    info "would unload LaunchAgent com.jcode.hotkey"
     return 0
   fi
 
-  if ! launchctl bootout "gui/$(id -u)" "$plist" >/dev/null 2>&1; then
-    # Fallback retained for backwards compatibility with pre-10.11 macOS.
-    launchctl unload "$plist" >/dev/null 2>&1 || true
+  # Unload by file path when the plist still exists.
+  if [[ -e "$plist" ]]; then
+    if ! launchctl bootout "gui/$(id -u)" "$plist" >/dev/null 2>&1; then
+      # Fallback retained for backwards compatibility with pre-10.11 macOS.
+      launchctl unload "$plist" >/dev/null 2>&1 || true
+    fi
+  fi
+
+  # Also unload by service label so the agent is stopped even if the plist was
+  # already deleted (e.g. a previous partial uninstall).
+  launchctl bootout "gui/$(id -u)/com.jcode.hotkey" >/dev/null 2>&1 || true
+}
+
+unregister_macos_app_launcher() {
+  [[ "$OS" = "Darwin" ]] || return 0
+
+  # Locate lsregister — the binary lives inside the CoreServices framework
+  # bundle and has been at this path since macOS 10.4; check a second candidate
+  # for forward-compatibility.
+  local lsregister=""
+  local candidate
+  for candidate in \
+    "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister" \
+    "/System/Library/Frameworks/CoreServices.framework/Support/lsregister"
+  do
+    if [[ -x "$candidate" ]]; then
+      lsregister="$candidate"
+      break
+    fi
+  done
+  [[ -n "$lsregister" ]] || return 0
+
+  local app_dir
+  for app_dir in "$HOME/Applications/Jcode.app" "$HOME/Applications/jcode.app"; do
+    [[ -d "$app_dir" ]] || continue
+    if [[ "$DRY_RUN" = true ]]; then
+      info "would unregister $app_dir from Launch Services"
+    else
+      "$lsregister" -u "$app_dir" >/dev/null 2>&1 || true
+      info "unregistered $app_dir from Launch Services"
+    fi
+  done
+}
+
+stop_running_processes() {
+  if ! command -v pkill >/dev/null 2>&1; then
+    warn "pkill not found; skipping process termination (stop jcode manually if running)"
+    return 0
+  fi
+
+  # pkill without -x does substring matching on the process name (comm), which
+  # catches the server (jcode:s:…), client (jcode:c:…), and hotkey variants that
+  # all derive from the "jcode" binary.
+  if [[ "$DRY_RUN" = true ]]; then
+    if pkill -0 jcode 2>/dev/null; then
+      info "would stop running jcode processes"
+    fi
+    return 0
+  fi
+
+  if pkill -TERM jcode 2>/dev/null; then
+    info "sent SIGTERM to jcode processes; waiting up to ${STOP_TIMEOUT} s…"
+    local i=0
+    while pkill -0 jcode 2>/dev/null && [[ $i -lt $STOP_TIMEOUT ]]; do
+      sleep 1
+      i=$(( i + 1 ))
+    done
+    if pkill -KILL jcode 2>/dev/null; then
+      info "force-killed remaining jcode processes"
+    fi
   fi
 }
 
 confirm
+stop_running_processes
 unload_macos_hotkey_agent
+unregister_macos_app_launcher
 
 remove_path "$launcher_path"
 remove_path "$JCODE_DIR"
