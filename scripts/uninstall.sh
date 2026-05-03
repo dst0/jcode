@@ -232,7 +232,7 @@ unload_macos_hotkey_agent() {
     unloaded=true
   fi
 
-  if [[ "$unloaded" = false ]]; then
+  if [[ "$unloaded" != true ]]; then
     info "no LaunchAgent com.jcode.hotkey to unload"
   fi
 }

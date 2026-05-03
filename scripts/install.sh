@@ -82,7 +82,7 @@ tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT
 
 download_mode=""
-info "Downloading $ARTIFACT from $VERSION..."
+info "Downloading $ARTIFACT (version $VERSION)..."
 if curl -fsSL "$URL_TGZ" -o "$tmpdir/jcode.download" 2>/dev/null; then
   download_mode="tar"
   info "downloaded archive: $URL_TGZ"
@@ -122,7 +122,7 @@ else
   info "cloning $REPO at $VERSION..."
   git clone --depth 1 --branch "$VERSION" "https://github.com/$REPO.git" "$src_dir" \
     || err "Failed to clone $REPO at $VERSION"
-  info "cloned $REPO at $VERSION"
+  info "clone complete"
   info "building jcode from source (this may take several minutes)..."
   cargo build --release --manifest-path "$src_dir/Cargo.toml" \
     || err "cargo build failed while building $REPO from source"
