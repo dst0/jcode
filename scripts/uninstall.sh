@@ -136,6 +136,7 @@ prune_dir_if_empty() {
     return 0
   fi
   rmdir "$path" 2>/dev/null || true
+  info "removed empty directory $path"
 }
 
 clean_rc_file() {
@@ -220,11 +221,14 @@ unload_macos_hotkey_agent() {
       # Fallback retained for backwards compatibility with pre-10.11 macOS.
       launchctl unload "$plist" >/dev/null 2>&1 || true
     fi
+    info "unloaded LaunchAgent com.jcode.hotkey (via $plist)"
   fi
 
   # Also unload by service label so the agent is stopped even if the plist was
   # already deleted (e.g. a previous partial uninstall).
-  launchctl bootout "gui/$(id -u)/com.jcode.hotkey" >/dev/null 2>&1 || true
+  if launchctl bootout "gui/$(id -u)/com.jcode.hotkey" >/dev/null 2>&1; then
+    info "unloaded LaunchAgent service com.jcode.hotkey"
+  fi
 }
 
 unregister_macos_app_launcher() {
@@ -269,29 +273,40 @@ stop_running_processes() {
   # all derive from the "jcode" binary.
   if [[ "$DRY_RUN" = true ]]; then
     if pkill -0 jcode 2>/dev/null; then
-      info "would stop running jcode processes"
+      local pids
+      pids="$(pgrep jcode 2>/dev/null | tr '\n' ' ' || true)"
+      info "would stop running jcode processes (PIDs: ${pids% })"
     fi
     return 0
   fi
 
+  local pids
+  pids="$(pgrep jcode 2>/dev/null | tr '\n' ' ' || true)"
   if pkill -TERM jcode 2>/dev/null; then
-    info "sent SIGTERM to jcode processes; waiting up to ${STOP_TIMEOUT} s…"
+    info "sent SIGTERM to jcode processes (PIDs: ${pids% }); waiting up to ${STOP_TIMEOUT} s…"
     local i=0
     while pkill -0 jcode 2>/dev/null && [[ $i -lt $STOP_TIMEOUT ]]; do
       sleep 1
       i=$(( i + 1 ))
     done
+    local remaining
+    remaining="$(pgrep jcode 2>/dev/null | tr '\n' ' ' || true)"
     if pkill -KILL jcode 2>/dev/null; then
-      info "force-killed remaining jcode processes"
+      info "force-killed remaining jcode processes (PIDs: ${remaining% })"
     fi
   fi
 }
 
 confirm
+info "--- stopping running processes ---"
 stop_running_processes
-unload_macos_hotkey_agent
-unregister_macos_app_launcher
+if [[ "$OS" = "Darwin" ]]; then
+  info "--- removing macOS services ---"
+  unload_macos_hotkey_agent
+  unregister_macos_app_launcher
+fi
 
+info "--- removing files ---"
 remove_path "$launcher_path"
 remove_path "$JCODE_DIR"
 remove_path "$APP_CONFIG_DIR"
@@ -308,6 +323,7 @@ done
 remove_glob_in_dir "$runtime_dir" 'browser-session-*.sock'
 remove_glob_in_dir "$runtime_dir" 'browser-session-*.pid'
 
+info "--- cleaning shell configuration ---"
 for rc in \
   "$HOME/.zshenv" \
   "$HOME/.zshrc" \
