@@ -21,6 +21,16 @@ async fn maybe_run_auth_test_smoke(
                     },
                 );
             }
+            Err(err)
+                if matches!(kind, AuthTestSmokeKind::Tool)
+                    && auth_test_error_indicates_missing_tool_support(&err) =>
+            {
+                report.push_step(
+                    kind.step_name(),
+                    true,
+                    "Skipped: selected model does not advertise tool support.",
+                );
+            }
             Err(err) => report.push_step(kind.step_name(), false, format!("{err:#}")),
         }
     } else if !target.supports_smoke() {
@@ -53,6 +63,16 @@ async fn maybe_run_auth_test_smoke_for_choice(
                             } else {
                                 kind.failure_detail(&output)
                             },
+                        );
+                    }
+                    Err(err)
+                        if matches!(kind, AuthTestSmokeKind::Tool)
+                            && auth_test_error_indicates_missing_tool_support(&err) =>
+                    {
+                        report.push_step(
+                            kind.step_name(),
+                            true,
+                            "Skipped: selected model does not advertise tool support.",
                         );
                     }
                     Err(err) => report.push_step(kind.step_name(), false, format!("{err:#}")),
