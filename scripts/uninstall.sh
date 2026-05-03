@@ -144,12 +144,9 @@ clean_rc_file() {
   awk -v path_line="$path_line" -v marker="$installer_marker" '
     $0 == marker {
       if (getline next_line > 0) {
-        if (next_line == path_line) {
-          next
+        if (next_line != path_line) {
+          print next_line
         }
-        print $0
-        print next_line
-        next
       }
       next
     }
@@ -211,7 +208,7 @@ unload_macos_hotkey_agent() {
   fi
 
   if ! launchctl bootout "gui/$(id -u)" "$plist" >/dev/null 2>&1; then
-    # Fallback retained for backwards compatibility with older macOS releases.
+    # Fallback retained for backwards compatibility with pre-10.11 macOS.
     launchctl unload "$plist" >/dev/null 2>&1 || true
   fi
 }
