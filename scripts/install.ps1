@@ -214,20 +214,31 @@ function Install-Alacritty {
         return $false
     }
 
-    Write-Info "Alacritty installed: $alacrittyPath"
+    Write-Info "✅ Alacritty installed: $alacrittyPath"
     return $true
 }
 
 function Stop-JcodeHotkeyListeners {
     try {
-        Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe' OR Name = 'pwsh.exe'" -ErrorAction SilentlyContinue |
-            Where-Object { $_.CommandLine -like '*jcode-hotkey*' } |
-            ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+        $procs = Get-CimInstance Win32_Process -Filter "Name = 'powershell.exe' OR Name = 'pwsh.exe'" -ErrorAction SilentlyContinue |
+            Where-Object { $_.CommandLine -like '*jcode-hotkey*' }
+        foreach ($p in $procs) {
+            $stopSuccess = $true
+            try {
+                Stop-Process -Id $p.ProcessId -Force -ErrorAction Stop
+            } catch {
+                $stopSuccess = $false
+            }
+            if ($stopSuccess) {
+                Write-Info "✅ stopped hotkey listener process (PID $($p.ProcessId))"
+            }
+        }
     } catch {}
 }
 
 function Set-SetupHintsState([bool]$AlacrittyConfigured, [bool]$HotkeyConfigured) {
     New-Item -ItemType Directory -Path $JcodeHome -Force | Out-Null
+    Write-Info "✅ ensured jcode home directory: $JcodeHome"
 
     $state = @{
         launch_count = 0
@@ -262,6 +273,7 @@ function Set-SetupHintsState([bool]$AlacrittyConfigured, [bool]$HotkeyConfigured
     }
 
     $state | ConvertTo-Json | Set-Content -Path $SetupHintsPath -Encoding UTF8
+    Write-Info "✅ wrote setup hints: $SetupHintsPath"
 }
 
 function Install-JcodeHotkey([string]$JcodeExePath) {
@@ -272,6 +284,7 @@ function Install-JcodeHotkey([string]$JcodeExePath) {
     }
 
     New-Item -ItemType Directory -Path $HotkeyDir -Force | Out-Null
+    Write-Info "✅ created hotkey directory: $HotkeyDir"
     Stop-JcodeHotkeyListeners
 
     $escapedAlacritty = $alacrittyPath.Replace("'", "''")
@@ -329,6 +342,7 @@ function Install-JcodeHotkey([string]$JcodeExePath) {
     )
     $ps1Content = $ps1Lines -join "`r`n"
     Set-Content -Path $ps1Path -Value $ps1Content -Encoding UTF8
+    Write-Info "✅ wrote hotkey script: $ps1Path"
 
     $vbsPath = Join-Path $HotkeyDir "jcode-hotkey-launcher.vbs"
     $vbsContent = @(
@@ -336,9 +350,11 @@ function Install-JcodeHotkey([string]$JcodeExePath) {
         ('objShell.Run "powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File ""{0}""", 0, False' -f $ps1Path)
     ) -join "`r`n"
     Set-Content -Path $vbsPath -Value $vbsContent -Encoding ASCII
+    Write-Info "✅ wrote hotkey launcher: $vbsPath"
 
     $startupDir = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Startup"
     New-Item -ItemType Directory -Path $startupDir -Force | Out-Null
+    Write-Info "✅ ensured Startup directory: $startupDir"
     $startupShortcutPath = (Join-Path $startupDir "jcode-hotkey.lnk").Replace("'", "''")
     $escapedVbsPath = $vbsPath.Replace("'", "''")
 
@@ -359,14 +375,17 @@ function Install-JcodeHotkey([string]$JcodeExePath) {
         Write-Warn "Created hotkey files, but could not create the Startup shortcut"
         return $false
     }
+    Write-Info "✅ created Startup shortcut: $(Join-Path $startupDir 'jcode-hotkey.lnk')"
 
     $launchHotkeyCommand = "Start-Process wscript.exe -ArgumentList '""{0}""' -WindowStyle Hidden" -f $vbsPath
     & powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -Command $launchHotkeyCommand | Out-Null
     if ($LASTEXITCODE -ne 0) {
         Write-Warn "Hotkey will start on next login, but could not be launched immediately"
+    } else {
+        Write-Info "✅ launched hotkey listener process (Alt+; will be active shortly)"
     }
 
-    Write-Info "Configured Alt+; to launch jcode in Alacritty"
+    Write-Info "✅ configured Alt+; to launch jcode in Alacritty"
     return $true
 }
 
@@ -426,7 +445,10 @@ if ($Existing) {
 Write-Info "  launcher: $LauncherPath"
 
 foreach ($d in @($InstallDir, $StableDir, $VersionDir)) {
-    if (-not (Test-Path $d)) { New-Item -ItemType Directory -Path $d -Force | Out-Null }
+    if (-not (Test-Path $d)) {
+        New-Item -ItemType Directory -Path $d -Force | Out-Null
+        Write-Info "✅ created directory: $d"
+    }
 }
 
 $TempDir = Join-Path $env:TEMP "jcode-install-$(Get-Random)"
@@ -469,8 +491,10 @@ if ($DownloadMode -eq "tar") {
         Write-Err "Downloaded archive did not contain expected binary: $Artifact.exe"
     }
     Move-Item -Path $SrcBin -Destination $DestBin -Force
+    Write-Info "✅ placed binary: $DestBin"
 } elseif ($DownloadMode -eq "bin") {
     Move-Item -Path $DownloadPath -Destination $DestBin -Force
+    Write-Info "✅ placed binary: $DestBin"
 } else {
     Write-Info "No prebuilt asset found for $Artifact in $Version; building from source..."
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Write-Err "git is required to build from source" }
@@ -512,21 +536,26 @@ if ($DownloadMode -eq "tar") {
     $BuiltBin = Join-Path $SrcDir "target\release\jcode.exe"
     if (-not (Test-Path $BuiltBin)) { Write-Err "Built binary not found at $BuiltBin" }
     Copy-Item -Path $BuiltBin -Destination $DestBin -Force
+    Write-Info "✅ placed binary: $DestBin"
 }
 
 Copy-Item -Path $DestBin -Destination (Join-Path $StableDir "jcode.exe") -Force
+Write-Info "✅ copied to stable: $(Join-Path $StableDir 'jcode.exe')"
 Set-Content -Path (Join-Path $BuildsDir "stable-version") -Value $VersionNum
+Write-Info "✅ wrote stable-version: $VersionNum"
 Copy-Item -Path (Join-Path $StableDir "jcode.exe") -Destination $LauncherPath -Force
+Write-Info "✅ copied launcher: $LauncherPath"
 
 Remove-Item -Path $TempDir -Recurse -Force -ErrorAction SilentlyContinue
 
 $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($UserPath -notlike "*$InstallDir*") {
     [Environment]::SetEnvironmentVariable("Path", "$InstallDir;$UserPath", "User")
-    Write-Info "Added $InstallDir to user PATH"
+    Write-Info "✅ added $InstallDir to user PATH"
 }
 
 $env:Path = "$InstallDir;$env:Path"
+Write-Info "✅ added $InstallDir to PATH for current session"
 
 $installedAlacritty = $false
 $configuredHotkey = $false
@@ -547,7 +576,7 @@ if ($SkipHotkeySetup) {
 Set-SetupHintsState -AlacrittyConfigured:(Test-AlacrittyInstalled) -HotkeyConfigured:$configuredHotkey
 
 Write-Host ""
-Write-Info "jcode $Version installed successfully!"
+Write-Info "✅ jcode $Version installed successfully!"
 Write-Host ""
 
 if (Test-AlacrittyInstalled) {

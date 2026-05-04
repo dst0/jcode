@@ -82,64 +82,91 @@ tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT
 
 download_mode=""
+info "Downloading $ARTIFACT (version $VERSION)..."
 if curl -fsSL "$URL_TGZ" -o "$tmpdir/jcode.download" 2>/dev/null; then
   download_mode="tar"
+  info "✅ downloaded archive: $URL_TGZ"
 elif curl -fsSL "$URL_BIN" -o "$tmpdir/jcode.download" 2>/dev/null; then
   download_mode="bin"
+  info "✅ downloaded binary: $URL_BIN"
 fi
 
 mkdir -p "$INSTALL_DIR" "$stable_dir" "$current_dir" "$version_dir"
+info "✅ ensured directory: $INSTALL_DIR"
+info "✅ ensured directory: $stable_dir"
+info "✅ ensured directory: $current_dir"
 
 version="${VERSION#v}"
 dest_version_dir="$version_dir/$version"
 mkdir -p "$dest_version_dir"
+info "✅ ensured directory: $dest_version_dir"
 
 bin_name="jcode${EXE}"
 
 if [ "$download_mode" = "tar" ]; then
+  info "Extracting archive..."
   tar xzf "$tmpdir/jcode.download" -C "$tmpdir"
   src_bin="$tmpdir/${ARTIFACT}${EXE}"
   [ -f "$src_bin" ] || err "Downloaded archive did not contain expected binary: ${ARTIFACT}${EXE}"
   mv "$src_bin" "$dest_version_dir/$bin_name"
+  info "✅ placed binary: $dest_version_dir/$bin_name"
 elif [ "$download_mode" = "bin" ]; then
   mv "$tmpdir/jcode.download" "$dest_version_dir/$bin_name"
+  info "✅ placed binary: $dest_version_dir/$bin_name"
 else
   info "No prebuilt asset found for $ARTIFACT in $VERSION; building from source..."
   command -v git >/dev/null 2>&1 || err "git is required to build from source"
   command -v cargo >/dev/null 2>&1 || err "cargo is required to build from source"
 
   src_dir="$tmpdir/jcode-src"
+  info "cloning $REPO at $VERSION..."
   git clone --depth 1 --branch "$VERSION" "https://github.com/$REPO.git" "$src_dir" \
     || err "Failed to clone $REPO at $VERSION"
+  info "✅ clone complete"
+  info "building jcode from source (this may take several minutes)..."
   cargo build --release --manifest-path "$src_dir/Cargo.toml" \
     || err "cargo build failed while building $REPO from source"
+  info "✅ build complete"
 
   src_bin="$src_dir/target/release/$bin_name"
   [ -f "$src_bin" ] || err "Built binary not found at $src_bin"
   cp "$src_bin" "$dest_version_dir/$bin_name"
+  info "✅ placed binary: $dest_version_dir/$bin_name"
 fi
 
 chmod +x "$dest_version_dir/$bin_name" 2>/dev/null || true
+info "✅ set executable bit: $dest_version_dir/$bin_name"
 
 if [ "$IS_WINDOWS" = true ]; then
   cp -f "$dest_version_dir/$bin_name" "$stable_dir/$bin_name"
+  info "✅ copied to stable: $stable_dir/$bin_name"
   printf '%s\n' "$version" > "$builds_dir/stable-version"
+  info "✅ wrote stable-version: $version"
   cp -f "$stable_dir/$bin_name" "$launcher_path"
+  info "✅ copied launcher: $launcher_path"
 else
   ln -sfn "$dest_version_dir/$bin_name" "$stable_dir/$bin_name"
+  info "✅ linked stable: $stable_dir/$bin_name -> $dest_version_dir/$bin_name"
   printf '%s\n' "$version" > "$builds_dir/stable-version"
+  info "✅ wrote stable-version: $version"
   ln -sfn "$stable_dir/$bin_name" "$launcher_path"
+  info "✅ linked launcher: $launcher_path -> $stable_dir/$bin_name"
 fi
 
 if [ "$(uname -s)" = "Darwin" ]; then
-  xattr -d com.apple.quarantine "$dest_version_dir/$bin_name" 2>/dev/null || true
+  if xattr -d com.apple.quarantine "$dest_version_dir/$bin_name" 2>/dev/null; then
+    info "✅ removed quarantine flag from $dest_version_dir/$bin_name"
+  fi
 fi
 
 if [ "$(uname -s)" = "Darwin" ]; then
+  info "setting up macOS hotkey (Alt+;)..."
   if "$launcher_path" setup-hotkey </dev/null >/dev/null 2>&1; then
     mac_hotkey_ready=true
+    info "✅ registered LaunchAgent for Alt+; hotkey"
   else
     mac_hotkey_ready=false
+    info "hotkey setup skipped (will prompt on first run)"
   fi
 fi
 
@@ -190,11 +217,14 @@ else
     for rc in "${path_files[@]}"; do
       if [ ! -f "$rc" ] || ! grep -qF "$INSTALL_DIR" "$rc" 2>/dev/null; then
         printf '\n# Added by jcode installer\n%s\n' "$PATH_LINE" >> "$rc"
+        info "✅ added PATH entry to $rc"
         added_to="$added_to $rc"
       fi
     done
 
-    info "Added $INSTALL_DIR to PATH in:$added_to"
+    if [ -n "$added_to" ]; then
+      info "✅ added $INSTALL_DIR to PATH in:$added_to"
+    fi
   fi
 
   echo ""
